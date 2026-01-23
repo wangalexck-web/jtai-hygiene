@@ -1,0 +1,11 @@
+<!doctype html>
+<html lang="zh-TW">
+<head>
+  <meta charset="utf-8" />
+  <title>JTAI 衛生巡檢</title>
+</head>
+<body>
+  <h1>JTAI 衛生巡檢</h1>
+  <p>看到這頁，代表前端正常。</p>
+</body>
+</html>
