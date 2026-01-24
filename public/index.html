@@ -1,21 +1,56 @@
-<hr />
+<!doctype html>
+<html lang="zh-TW">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>JTAI 衛生巡檢</title>
+</head>
+<body>
+  <h1>JTAI 衛生巡檢</h1>
 
-<button id="btn2">送出一筆巡檢（寫入 Supabase）</button>
+  <p>測試區：按按鈕後，下方一定會出現回應（成功或錯誤）。</p>
 
-<script>
-  document.getElementById('btn2').onclick = async () => {
-    const res = await fetch('/api/report_submit', {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({
-        site_name: 'JTAI',
-        area: '廁所',
-        status: 'OK',
-        note: 'Vercel 寫入測試'
-      })
-    });
-    const data = await res.json();
-    document.getElementById('out').textContent = JSON.stringify(data, null, 2);
-  };
-</script>
+  <button id="btnHealth">測試 API /api/health</button>
+  <button id="btnWrite">送出一筆巡檢（寫入 Supabase）</button>
+
+  <pre id="out" style="white-space:pre-wrap; border:1px solid #ccc; padding:12px; margin-top:12px;"></pre>
+
+  <script>
+    const out = document.getElementById('out');
+    function show(obj) {
+      out.textContent = typeof obj === 'string' ? obj : JSON.stringify(obj, null, 2);
+    }
+
+    async function safeFetch(url, options) {
+      try {
+        show(`Loading: ${url} ...`);
+        const res = await fetch(url, options);
+        const text = await res.text();
+        let data;
+        try { data = JSON.parse(text); } catch { data = text; }
+        show({ ok: res.ok, status: res.status, data });
+      } catch (e) {
+        show({ ok: false, error: String(e && e.message ? e.message : e) });
+      }
+    }
+
+    document.getElementById('btnHealth').onclick = () => {
+      safeFetch('/api/health');
+    };
+
+    document.getElementById('btnWrite').onclick = () => {
+      safeFetch('/api/report_submit', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          site_name: 'JTAI',
+          area: '廁所',
+          status: 'OK',
+          note: 'Vercel 寫入測試'
+        })
+      });
+    };
+  </script>
+</body>
+</html>
 
