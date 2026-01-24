@@ -1,12 +1,15 @@
 function json(res, status, obj) {
-  res.status(status).setHeader("content-type", "application/json; charset=utf-8");
+  res.statusCode = status;
+  res.setHeader("content-type", "application/json; charset=utf-8");
   res.end(JSON.stringify(obj));
 }
 
-function bearer(req) {
-  const h = req.headers["authorization"] || "";
-  if (typeof h === "string" && h.toLowerCase().startsWith("bearer ")) return h.slice(7).trim();
-  return "";
+// 更健壯的 Bearer 解析（容忍大小寫與多餘空白）
+function getBearerToken(req) {
+  const h = req.headers["authorization"] || req.headers["Authorization"] || "";
+  if (typeof h !== "string") return "";
+  const m = h.match(/^\s*bearer\s+(.+)\s*$/i);
+  return m ? m[1].trim() : "";
 }
 
 async function sbInsert(table, rows) {
@@ -32,10 +35,21 @@ async function sbInsert(table, rows) {
 
 export default async function handler(req, res) {
   try {
-    if (req.method !== "POST") return json(res, 405, { ok: false, error: "METHOD_NOT_ALLOWED" });
+    if (req.method !== "POST") {
+      return json(res, 405, { ok: false, error: "METHOD_NOT_ALLOWED" });
+    }
 
-    const token = bearer(req);
-    if (!process.env.ADMIN_TOKEN || token !== process.env.ADMIN_TOKEN) {
+    const adminToken = (process.env.ADMIN_TOKEN || "").trim();
+    const bearer = getBearerToken(req);
+
+    // 清楚回錯（方便你定位）
+    if (!adminToken) {
+      return json(res, 500, { ok: false, error: "ADMIN_TOKEN_NOT_SET" });
+    }
+    if (!bearer) {
+      return json(res, 401, { ok: false, error: "MISSING_BEARER" });
+    }
+    if (bearer !== adminToken) {
       return json(res, 401, { ok: false, error: "UNAUTHORIZED" });
     }
 
@@ -47,9 +61,10 @@ export default async function handler(req, res) {
       return json(res, 400, { ok: false, error: "BAD_REQUEST", message: "org_name, org_code required" });
     }
 
-    // ✅ 先只做 org 建立：這一步一定能跑通（因為你已經有 orgs 表）
     const orgR = await sbInsert("orgs", [{ name: org_name, code: org_code, is_active: true }]);
-    if (!orgR.ok) return json(res, 502, { ok: false, error: "SUPABASE_ERROR_ORG", detail: orgR });
+    if (!orgR.ok) {
+      return json(res, 502, { ok: false, error: "SUPABASE_ERROR_ORG", detail: orgR });
+    }
 
     const org = Array.isArray(orgR.data) ? orgR.data[0] : orgR.data;
     return json(res, 200, { ok: true, org });
@@ -57,3 +72,4 @@ export default async function handler(req, res) {
     return json(res, 500, { ok: false, error: "SERVER_ERROR", message: String(e?.message || e) });
   }
 }
+
