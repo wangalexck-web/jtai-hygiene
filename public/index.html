@@ -1,24 +1,21 @@
-<!doctype html>
-<html lang="zh-TW">
-<head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>JTAI 衛生巡檢</title>
-</head>
-<body>
-  <h1>JTAI 衛生巡檢</h1>
-  <p>如果你看到這頁，代表靜態頁成功。</p>
+<hr />
 
-  <button id="btn">測試 API /api/health</button>
-  <pre id="out"></pre>
+<button id="btn2">送出一筆巡檢（寫入 Supabase）</button>
 
-  <script>
-    document.getElementById('btn').onclick = async () => {
-      const res = await fetch('/api/health');
-      const data = await res.json();
-      document.getElementById('out').textContent =
-        JSON.stringify(data, null, 2);
-    };
-  </script>
-</body>
-</html>
+<script>
+  document.getElementById('btn2').onclick = async () => {
+    const res = await fetch('/api/report_submit', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        site_name: 'JTAI',
+        area: '廁所',
+        status: 'OK',
+        note: 'Vercel 寫入測試'
+      })
+    });
+    const data = await res.json();
+    document.getElementById('out').textContent = JSON.stringify(data, null, 2);
+  };
+</script>
+
