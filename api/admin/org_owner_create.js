@@ -57,8 +57,6 @@ async function sbPost(table, rows) {
 }
 
 function simpleTempHash() {
-  // Pilot 用：先塞一個「臨時 hash」，之後做登入/重設再換成 bcrypt
-  // 保證不為空且每次不同
   return `temp$${Date.now()}$${Math.random().toString(16).slice(2)}`;
 }
 
@@ -74,22 +72,22 @@ export default async function handler(req, res) {
     if (bearer !== adminToken) return json(res, 401, { ok: false, error: "UNAUTHORIZED" });
 
     const body = typeof req.body === "string" ? JSON.parse(req.body || "{}") : (req.body || {});
-    const org_code = (body.org_code || "").trim().toLowerCase();
-    const username = (body.username || "").trim().toLowerCase(); // 你可以用 email 當 username
+    const org_id = (body.org_id || "").trim();                 // ✅ 改用 org_id
+    const username = (body.username || "").trim().toLowerCase();
     const display_name = (body.display_name || "").trim() || null;
 
-    if (!org_code || !username) {
-      return json(res, 400, { ok: false, error: "BAD_REQUEST", message: "org_code, username required" });
+    if (!org_id || !username) {
+      return json(res, 400, { ok: false, error: "BAD_REQUEST", message: "org_id, username required" });
     }
 
-    // 1) 找 org
-    const orgR = await sbGet(`orgs?code=eq.${encodeURIComponent(org_code)}&select=*`);
+    // 1) 確認 org 存在（用 id）
+    const orgR = await sbGet(`orgs?id=eq.${encodeURIComponent(org_id)}&select=*`);
     if (!orgR.ok) return json(res, 502, { ok: false, error: "SUPABASE_ERROR_ORG_LOOKUP", detail: orgR });
 
     const org = Array.isArray(orgR.data) ? orgR.data[0] : null;
-    if (!org) return json(res, 404, { ok: false, error: "ORG_NOT_FOUND", org_code });
+    if (!org) return json(res, 404, { ok: false, error: "ORG_NOT_FOUND", org_id });
 
-    // 2) 找 user（若不存在就建立）
+    // 2) 找 user（不存在就建立）
     const userFindR = await sbGet(`users?username=eq.${encodeURIComponent(username)}&select=*`);
     if (!userFindR.ok) return json(res, 502, { ok: false, error: "SUPABASE_ERROR_USER_LOOKUP", detail: userFindR });
 
@@ -102,30 +100,22 @@ export default async function handler(req, res) {
         display_name
       }]);
       if (!userInsR.ok) return json(res, 502, { ok: false, error: "SUPABASE_ERROR_USER_CREATE", detail: userInsR });
-
       user = Array.isArray(userInsR.data) ? userInsR.data[0] : userInsR.data;
     }
 
-    // 3) 檢查是否已是 member
-    const memFindR = await sbGet(
-      `org_members?org_id=eq.${encodeURIComponent(org.id)}&user_id=eq.${encodeURIComponent(user.id)}&select=*`
-    );
+    // 3) member 既有就不重複建
+    const memFindR = await sbGet(`org_members?org_id=eq.${encodeURIComponent(org.id)}&user_id=eq.${encodeURIComponent(user.id)}&select=*`);
     if (!memFindR.ok) return json(res, 502, { ok: false, error: "SUPABASE_ERROR_MEMBER_LOOKUP", detail: memFindR });
 
     let member = Array.isArray(memFindR.data) ? memFindR.data[0] : null;
 
     if (!member) {
-      // role 是 enum；我們先用 'owner'（符合你需求）
       const memInsR = await sbPost("org_members", [{
         org_id: org.id,
         user_id: user.id,
         role: "owner"
-        // status 讓它吃預設 active
       }]);
-
-      if (!memInsR.ok) {
-        return json(res, 502, { ok: false, error: "SUPABASE_ERROR_MEMBER_CREATE", detail: memInsR, org, user });
-      }
+      if (!memInsR.ok) return json(res, 502, { ok: false, error: "SUPABASE_ERROR_MEMBER_CREATE", detail: memInsR, org, user });
       member = Array.isArray(memInsR.data) ? memInsR.data[0] : memInsR.data;
     }
 
@@ -134,3 +124,4 @@ export default async function handler(req, res) {
     return json(res, 500, { ok: false, error: "SERVER_ERROR", message: String(e?.message || e) });
   }
 }
+
