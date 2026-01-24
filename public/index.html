@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="zh-TW">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>JTAI 衛生巡檢</title>
+</head>
+<body>
+  <h1>JTAI 衛生巡檢</h1>
+  <p>如果你看到這頁，代表靜態頁成功。</p>
+
+  <button id="btn">測試 API /api/health</button>
+  <pre id="out"></pre>
+
+  <script>
+    document.getElementById('btn').onclick = async () => {
+      const res = await fetch('/api/health');
+      const data = await res.json();
+      document.getElementById('out').textContent =
+        JSON.stringify(data, null, 2);
+    };
+  </script>
+</body>
+</html>
