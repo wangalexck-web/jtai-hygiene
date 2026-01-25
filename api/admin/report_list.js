@@ -47,17 +47,11 @@ export default async function handler(req, res) {
     if (bearer !== adminToken) return json(res, 401, { ok: false, error: "UNAUTHORIZED" });
 
     const url = new URL(req.url, "http://localhost");
-    const org_id = (url.searchParams.get("org_id") || "").trim();
-    const site_id = (url.searchParams.get("site_id") || "").trim();
     const limit = Math.min(parseInt(url.searchParams.get("limit") || "50", 10) || 50, 200);
 
-    if (!org_id) return json(res, 400, { ok: false, error: "BAD_REQUEST", message: "org_id required" });
-
-    // hygiene_reports 依你之前 M0 有的表
-    // 假設欄位包含 org_id, site_id, created_at
-    let q = `hygiene_reports?org_id=eq.${encodeURIComponent(org_id)}`;
-    if (site_id) q += `&site_id=eq.${encodeURIComponent(site_id)}`;
-    q += `&select=*&order=created_at.desc&limit=${limit}`;
+    // ✅ 先不做 org_id filter（因為你的表沒有 org_id 欄位）
+    // 先讓 Admin 能查到資料，後續再依你的實際欄位加 filter
+    const q = `hygiene_reports?select=*&order=created_at.desc&limit=${limit}`;
 
     const r = await sbGet(q);
     if (!r.ok) return json(res, 502, { ok: false, error: "SUPABASE_ERROR", detail: r });
