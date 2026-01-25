@@ -2,55 +2,212 @@
 <html lang="zh-TW">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>JTAI 衛生巡檢</title>
+  <style>
+    body { font-family: system-ui, -apple-system, Segoe UI, Roboto, "Noto Sans TC", Arial, sans-serif; margin: 16px; }
+    .card { border: 1px solid #ddd; border-radius: 10px; padding: 12px; margin: 12px 0; }
+    .row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+    input, select, button, textarea { font-size: 16px; padding: 8px; }
+    button { cursor: pointer; }
+    pre { background: #0b0b0b; color: #d9d9d9; padding: 10px; border-radius: 10px; overflow:auto; }
+    .muted { color:#666; font-size: 13px; }
+    .ok { color: #0a7; font-weight: 700; }
+    .bad { color: #c00; font-weight: 700; }
+    label { font-size: 13px; color:#333; }
+    .w300 { width: 300px; }
+    .w220 { width: 220px; }
+    .w160 { width: 160px; }
+  </style>
 </head>
 <body>
   <h1>JTAI 衛生巡檢</h1>
+  <p class="muted">M1 Admin Web（最小可用版）</p>
 
-  <p>測試區：按按鈕後，下方一定會出現回應（成功或錯誤）。</p>
+  <div class="card">
+    <h2>0) 連線測試</h2>
+    <div class="row">
+      <button id="btnHealth">測試 /api/health</button>
+      <span id="healthMsg" class="muted"></span>
+    </div>
+    <pre id="healthOut"></pre>
+  </div>
 
-  <button id="btnHealth">測試 API /api/health</button>
-  <button id="btnWrite">送出一筆巡檢（寫入 Supabase）</button>
+  <div class="card">
+    <h2>1) Admin Token</h2>
+    <div class="row">
+      <input id="adminToken" class="w300" placeholder="貼上 ADMIN_TOKEN（不會上傳/不會保存到伺服器）" />
+      <button id="btnSaveToken">暫存 Token</button>
+      <span id="tokenMsg" class="muted"></span>
+    </div>
+    <p class="muted">提醒：這頁面只把 token 暫存在瀏覽器 localStorage（你清除瀏覽資料就會消失）。</p>
+  </div>
 
-  <pre id="out" style="white-space:pre-wrap; border:1px solid #ccc; padding:12px; margin-top:12px;"></pre>
+  <div class="card">
+    <h2>2) Org 管理</h2>
+    <div class="row">
+      <button id="btnOrgList">抓 org_list</button>
+      <select id="orgSelect" class="w300"></select>
+      <span id="orgMsg" class="muted"></span>
+    </div>
+    <pre id="orgOut"></pre>
+  </div>
 
-  <script>
-    const out = document.getElementById('out');
-    function show(obj) {
-      out.textContent = typeof obj === 'string' ? obj : JSON.stringify(obj, null, 2);
-    }
+  <div class="card">
+    <h2>3) Sites（場域）</h2>
+    <div class="row">
+      <label>名稱</label>
+      <input id="siteName" class="w220" placeholder="例如：廁所" />
+      <button id="btnSiteCreate">建立 site</button>
+      <button id="btnSiteList">列出 sites</button>
+      <span id="siteMsg" class="muted"></span>
+    </div>
+    <pre id="siteOut"></pre>
+  </div>
 
-    async function safeFetch(url, options) {
-      try {
-        show(`Loading: ${url} ...`);
-        const res = await fetch(url, options);
-        const text = await res.text();
-        let data;
-        try { data = JSON.parse(text); } catch { data = text; }
-        show({ ok: res.ok, status: res.status, data });
-      } catch (e) {
-        show({ ok: false, error: String(e && e.message ? e.message : e) });
+  <div class="card">
+    <h2>4) 巡檢查詢（Reports）</h2>
+    <div class="row">
+      <label>筆數</label>
+      <input id="repLimit" class="w160" value="20" />
+      <button id="btnReportList">查 reports</button>
+      <span id="repMsg" class="muted"></span>
+    </div>
+    <pre id="repOut"></pre>
+  </div>
+
+<script>
+  const $ = (id) => document.getElementById(id);
+
+  function setMsg(el, text, ok=true) {
+    el.textContent = text || "";
+    el.className = ok ? "ok" : "bad";
+  }
+
+  function getToken() {
+    return localStorage.getItem("JTAI_ADMIN_TOKEN") || "";
+  }
+
+  function requireToken() {
+    const t = getToken().trim();
+    if (!t) throw new Error("請先在「Admin Token」貼上並暫存");
+    return t;
+  }
+
+  async function apiGet(url, needAuth=false) {
+    const headers = {};
+    if (needAuth) headers["authorization"] = "Bearer " + requireToken();
+    const r = await fetch(url, { method:"GET", headers });
+    const text = await r.text();
+    let data;
+    try { data = JSON.parse(text); } catch { data = text; }
+    return { ok: r.ok, status: r.status, data };
+  }
+
+  async function apiPost(url, bodyObj, needAuth=false) {
+    const headers = { "content-type":"application/json" };
+    if (needAuth) headers["authorization"] = "Bearer " + requireToken();
+    const r = await fetch(url, { method:"POST", headers, body: JSON.stringify(bodyObj) });
+    const text = await r.text();
+    let data;
+    try { data = JSON.parse(text); } catch { data = text; }
+    return { ok: r.ok, status: r.status, data };
+  }
+
+  // 0) health
+  $("btnHealth").onclick = async () => {
+    $("healthOut").textContent = "";
+    setMsg($("healthMsg"), "執行中...", true);
+    const r = await apiGet("/api/health");
+    $("healthOut").textContent = JSON.stringify(r.data, null, 2);
+    setMsg($("healthMsg"), r.ok ? "OK" : ("失敗 status=" + r.status), r.ok);
+  };
+
+  // 1) save token
+  $("btnSaveToken").onclick = () => {
+    const t = $("adminToken").value.trim();
+    if (!t) return setMsg($("tokenMsg"), "token 不能為空", false);
+    localStorage.setItem("JTAI_ADMIN_TOKEN", t);
+    setMsg($("tokenMsg"), "已暫存", true);
+  };
+  // init token field
+  $("adminToken").value = getToken();
+
+  // 2) org list
+  $("btnOrgList").onclick = async () => {
+    $("orgOut").textContent = "";
+    setMsg($("orgMsg"), "抓取中...", true);
+    try {
+      const r = await apiGet("/api/admin/org_list", true);
+      $("orgOut").textContent = JSON.stringify(r.data, null, 2);
+      if (!r.ok || !r.data || !r.data.orgs) return setMsg($("orgMsg"), "失敗", false);
+
+      const orgs = r.data.orgs;
+      $("orgSelect").innerHTML = "";
+      for (const o of orgs) {
+        const opt = document.createElement("option");
+        opt.value = o.id;
+        opt.textContent = `${o.name} (${o.id.slice(0,8)}...)`;
+        $("orgSelect").appendChild(opt);
       }
+      setMsg($("orgMsg"), `OK（${orgs.length} 筆）`, true);
+    } catch (e) {
+      setMsg($("orgMsg"), String(e.message || e), false);
     }
+  };
 
-    document.getElementById('btnHealth').onclick = () => {
-      safeFetch('/api/health');
-    };
+  function selectedOrgId() {
+    const id = ($("orgSelect").value || "").trim();
+    if (!id) throw new Error("請先抓 org_list 並選一個 org");
+    return id;
+  }
 
-    document.getElementById('btnWrite').onclick = () => {
-      safeFetch('/api/report_submit', {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({
-          site_name: 'JTAI',
-          area: '廁所',
-          status: 'OK',
-          note: 'Vercel 寫入測試'
-        })
-      });
-    };
-  </script>
+  // 3) site create
+  $("btnSiteCreate").onclick = async () => {
+    $("siteOut").textContent = "";
+    setMsg($("siteMsg"), "建立中...", true);
+    try {
+      const org_id = selectedOrgId();
+      const name = $("siteName").value.trim();
+      if (!name) throw new Error("site 名稱不可空白");
+
+      const r = await apiPost("/api/admin/site_upsert", { org_id, name, is_active: true }, true);
+      $("siteOut").textContent = JSON.stringify(r.data, null, 2);
+      setMsg($("siteMsg"), r.ok ? "OK" : "失敗", r.ok);
+    } catch (e) {
+      setMsg($("siteMsg"), String(e.message || e), false);
+    }
+  };
+
+  // 3) site list
+  $("btnSiteList").onclick = async () => {
+    $("siteOut").textContent = "";
+    setMsg($("siteMsg"), "查詢中...", true);
+    try {
+      const org_id = selectedOrgId();
+      const r = await apiGet("/api/admin/site_list?org_id=" + encodeURIComponent(org_id), true);
+      $("siteOut").textContent = JSON.stringify(r.data, null, 2);
+      setMsg($("siteMsg"), r.ok ? "OK" : "失敗", r.ok);
+    } catch (e) {
+      setMsg($("siteMsg"), String(e.message || e), false);
+    }
+  };
+
+  // 4) report list (currently no org filter)
+  $("btnReportList").onclick = async () => {
+    $("repOut").textContent = "";
+    setMsg($("repMsg"), "查詢中...", true);
+    try {
+      const limit = parseInt($("repLimit").value || "20", 10) || 20;
+      const r = await apiGet("/api/admin/report_list?limit=" + encodeURIComponent(limit), true);
+      $("repOut").textContent = JSON.stringify(r.data, null, 2);
+      setMsg($("repMsg"), r.ok ? "OK" : "失敗", r.ok);
+    } catch (e) {
+      setMsg($("repMsg"), String(e.message || e), false);
+    }
+  };
+</script>
 </body>
 </html>
+
 
