@@ -52,15 +52,14 @@ export default async function handler(req, res) {
     const body = typeof req.body === "string" ? JSON.parse(req.body || "{}") : (req.body || {});
     const org_id = (body.org_id || "").trim();
     const name = (body.name || "").trim();
-    const slug = (body.slug || "").trim() || null;
     const is_active = body.is_active === false ? false : true;
 
     if (!org_id || !name) {
       return json(res, 400, { ok: false, error: "BAD_REQUEST", message: "org_id + name required" });
     }
 
-    // 依你的 schema，假設 sites 有 org_id, name, slug, is_active
-    const r = await sbPost("sites", [{ org_id, name, slug, is_active }]);
+    // ✅ sites 表：只寫存在的欄位
+    const r = await sbPost("sites", [{ org_id, name, is_active }]);
     if (!r.ok) return json(res, 502, { ok: false, error: "SUPABASE_ERROR", detail: r });
 
     return json(res, 200, { ok: true, site: Array.isArray(r.data) ? r.data[0] : r.data });
